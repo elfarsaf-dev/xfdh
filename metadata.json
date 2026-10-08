@@ -1,0 +1,6 @@
+{
+  "name": "Atria Multi-Agent Termux Dashboard",
+  "description": "Real-time monitoring dashboard and live preview for 7-agent Termux multi-agent system with key rotation and workspace isolation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

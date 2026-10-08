@@ -1,0 +1,48 @@
+{
+  "api_base": "https://api.atria-asi.ai/v1",
+  "model": "Atria-Dawn-Preview",
+  "keys": {
+    "key_1": {
+      "key": "atria-key-mandor-orchestrator-01",
+      "role": "mandor",
+      "assigned_agent": "Mandor",
+      "status": "active"
+    },
+    "key_2": {
+      "key": "atria-key-backend-worker-02",
+      "role": "backend",
+      "assigned_agent": "Backend Agent",
+      "status": "active"
+    },
+    "key_3": {
+      "key": "atria-key-frontend-worker-03",
+      "role": "frontend",
+      "assigned_agent": "Frontend Agent",
+      "status": "active"
+    },
+    "key_4": {
+      "key": "atria-key-backup-failover-04",
+      "role": "backup_1",
+      "assigned_agent": "Standby Pool",
+      "status": "standby"
+    },
+    "key_5": {
+      "key": "atria-key-backup-failover-05",
+      "role": "backup_2",
+      "assigned_agent": "Standby Pool",
+      "status": "standby"
+    },
+    "key_6": {
+      "key": "atria-key-backup-failover-06",
+      "role": "backup_3",
+      "assigned_agent": "Standby Pool",
+      "status": "standby"
+    },
+    "key_7": {
+      "key": "atria-key-monitoring-qa-07",
+      "role": "monitoring",
+      "assigned_agent": "Monitoring Agent",
+      "status": "active"
+    }
+  }
+}
