@@ -1486,9 +1486,9 @@ echo "✓ Struktur isolasi selesai dibuat."
 echo "🚀 Jalankan: python main.py"`,
 
       rotator: `#!/usr/bin/env python3
-# client_rotator.py - Key Rotator Atria-Dawn-Preview (baca dari .env)
-import os, time, asyncio
-from openai import AsyncOpenAI, RateLimitError
+# client_rotator.py - 100% Native Zero-Dependency HTTP Client (urllib)
+# Bebas pip install openai, bebas Rust/maturin! Langsung jalan di Termux.
+import os, json, time, asyncio, urllib.request, urllib.error
 
 def load_env(path=".env"):
     if not os.path.exists(path):
@@ -1504,7 +1504,7 @@ def load_env(path=".env"):
 class AtriaKeyRotator:
     def __init__(self):
         load_env()
-        self.api_base = os.getenv("ATRIA_API_BASE", "https://api.atria-asi.ai/v1")
+        self.api_base = os.getenv("ATRIA_API_BASE", "https://api.atria-asi.ai/v1").rstrip("/")
         self.model = os.getenv("ATRIA_MODEL", "Atria-Dawn-Preview")
         self.keys = {
             "key_1": {"key": os.getenv("ATRIA_KEY_1", ""), "role": "mandor", "status": "active"},
@@ -1517,15 +1517,37 @@ class AtriaKeyRotator:
         }
         self.backup_queue = ["key_4", "key_5", "key_6"]
 
-    def get_client(self, role: str) -> AsyncOpenAI:
+    def get_api_key(self, role: str) -> str:
         m = {"mandor": "key_1", "backend": "key_2", "frontend": "key_3", "monitoring": "key_7"}
-        return AsyncOpenAI(base_url=self.api_base, api_key=self.keys[m[role]]["key"])
+        return self.keys[m.get(role, "key_1")]["key"]
 
     def rotate_on_429(self, role: str) -> str:
-        if not self.backup_queue: raise RuntimeError("Key cadangan habis!")
+        if not self.backup_queue: raise RuntimeError("Semua key cadangan habis!")
         new_k = self.backup_queue.pop(0)
         print(f"[KEY ROTATION] ⚡ Peran {role} berganti ke {new_k}")
-        return self.keys[new_k]["key"]`,
+        return self.keys[new_k]["key"]
+
+    def _sync_post(self, key: str, payload: dict) -> dict:
+        req = urllib.request.Request(
+            f"{self.api_base}/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+            method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return {"code": resp.status, "data": json.loads(resp.read().decode())}
+        except urllib.error.HTTPError as e:
+            return {"code": e.code, "error": e.read().decode()}
+
+    async def execute_chat_completion(self, role: str, messages: list):
+        key = self.get_api_key(role)
+        payload = {"model": self.model, "messages": messages, "temperature": 0.2}
+        res = await asyncio.to_thread(self._sync_post, key, payload)
+        if res.get("code") == 429:
+            key = self.rotate_on_429(role)
+            res = await asyncio.to_thread(self._sync_post, key, payload)
+        return res.get("data", {})`,
 
       mandor: `#!/usr/bin/env python3
 # mandor.py - Orchestrator Atria-Dawn-Preview
@@ -1542,19 +1564,16 @@ class MandorOrchestrator:
 
     async def run(self):
         print(f"[MANDOR] Memproses {self.task_id} dengan {self.rotator.model}...")
-        client = self.rotator.get_client("mandor")
         
-        # 1. Perencanaan
-        res = await client.chat.completions.create(
-            model=self.rotator.model,
-            messages=[
-                {"role": "system", "content": "Kamu adalah Mandor AI. Pecah tugas menjadi subtask backend & frontend."},
-                {"role": "user", "content": self.brief}
-            ]
-        )
-        print("✓ Rencana subtask selesai dibuat.")
+        # 1. Perencanaan (Panggil Atria via urllib native)
+        res = await self.rotator.execute_chat_completion("mandor", [
+            {"role": "system", "content": "Kamu adalah Mandor AI. Pecah tugas menjadi subtask backend & frontend."},
+            {"role": "user", "content": self.brief}
+        ])
+        content = res.get("choices", [{}])[0].get("message", {}).get("content", "Rencana dibuat.")
+        print(f"✓ Rencana: {content[:100]}...")
         
-        # 2. Buat contract
+        # 2. Tulis kontrak komunikasi
         b_tools = AgentSandboxTools(self.task_dir, "backend")
         b_tools.write_file("shared/api-contract.json", json.dumps({"endpoints": [{"path": "/api/demo", "method": "GET"}]}, indent=2))
         print("✓ shared/api-contract.json berhasil ditulis.")`,

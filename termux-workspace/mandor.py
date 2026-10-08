@@ -63,7 +63,10 @@ class MandorOrchestrator:
             {"role": "user", "content": f"Brief user: {self.prompt_brief}"}
         ]
         res = await self.rotator.execute_chat_completion("mandor", mandor_prompt)
-        plan_text = res.choices[0].message.content
+        if isinstance(res, dict):
+            plan_text = res.get("choices", [{}])[0].get("message", {}).get("content", "")
+        else:
+            plan_text = getattr(getattr(res.choices[0], "message", None), "content", "")
         print(f"[MANDOR PLAN]\n{plan_text[:300]}...\n")
 
         # Step 2: Backend Agent membuat contract

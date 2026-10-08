@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
 """
 client_rotator.py - Atria Dawn Preview Key Rotator & Client Manager
-Membaca 7 API Keys dari file .env (atau Environment Variables).
-Mendukung failover otomatis saat HTTP 429 Too Many Requests.
+MENGGUNAKAN HTTP CLIENT BAWAAN PYTHON (urllib.request & json).
+100% BEBAS DEPENDENSI: Tidak butuh 'pip install openai', tidak butuh Rust/maturin!
+Langsung jalan di Termux Android (Python 3.10 - 3.14).
 """
 
 import os
 import sys
+import json
 import time
 import asyncio
+import urllib.request
+import urllib.error
 from typing import Dict, Any, Optional, List
 
-try:
-    from openai import AsyncOpenAI, RateLimitError, APIError
-except ImportError:
-    AsyncOpenAI = None
-
 def load_env(env_path: str = ".env"):
-    """Parser .env mandiri tanpa perlu install python-dotenv."""
+    """Parser .env mandiri tanpa dependensi."""
     if not os.path.exists(env_path):
-        # Cari di folder workspace parent jika tidak ada di cwd
         parent_env = os.path.expanduser("~/agent-workspace/.env")
         if os.path.exists(parent_env):
             env_path = parent_env
@@ -41,7 +39,7 @@ def load_env(env_path: str = ".env"):
 class AtriaKeyRotator:
     def __init__(self, env_path: str = ".env"):
         load_env(env_path)
-        self.api_base = os.getenv("ATRIA_API_BASE", "https://api.atria-asi.ai/v1")
+        self.api_base = os.getenv("ATRIA_API_BASE", "https://api.atria-asi.ai/v1").rstrip("/")
         self.model = os.getenv("ATRIA_MODEL", "Atria-Dawn-Preview")
         
         # Load 7 keys
@@ -57,10 +55,7 @@ class AtriaKeyRotator:
         self.backup_queue: List[str] = ["key_4", "key_5", "key_6"]
         self.rotation_history: List[Dict[str, Any]] = []
 
-    def get_client(self, role: str) -> Optional[Any]:
-        if AsyncOpenAI is None:
-            raise ImportError("Jalankan 'pip install openai' terlebih dahulu di Termux.")
-
+    def get_api_key(self, role: str) -> str:
         role_map = {
             "mandor": "key_1",
             "backend": "key_2",
@@ -68,16 +63,11 @@ class AtriaKeyRotator:
             "monitoring": "key_7"
         }
         key_id = role_map.get(role, "key_1")
-        key_val = self.keys.get(key_id, {}).get("key")
-        
-        return AsyncOpenAI(
-            base_url=self.api_base,
-            api_key=key_val
-        )
+        return self.keys.get(key_id, {}).get("key", "")
 
     def rotate_key_for_role(self, role: str) -> Optional[str]:
         if not self.backup_queue:
-            print(f"\n[CRITICAL] Semua key cadangan (.env ATRIA_KEY_4-6) sudah habis!")
+            print(f"\n[CRITICAL] Semua key cadangan (.env ATRIA_KEY_4-6) sudah terpakai!")
             return None
 
         new_key_id = self.backup_queue.pop(0)
@@ -104,41 +94,65 @@ class AtriaKeyRotator:
         print(f"\n[KEY ROTATION] ⚡ Peran '{role}' otomatis rotasi ke {new_key_id} (Cadangan)!")
         return new_api_key
 
+    def _sync_http_post(self, api_key: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Eksekusi request HTTP POST native tanpa dependensi."""
+        url = f"{self.api_base}/chat/completions"
+        data_bytes = json.dumps(payload).encode("utf-8")
+
+        req = urllib.request.Request(url, data=data_bytes, method="POST")
+        req.add_header("Content-Type", "application/json")
+        req.add_header("Authorization", f"Bearer {api_key}")
+        req.add_header("User-Agent", "Atria-Termux-Agent/1.0")
+
+        try:
+            with urllib.request.urlopen(req, timeout=60) as response:
+                body = response.read().decode("utf-8")
+                return {"status_code": response.status, "data": json.loads(body)}
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8") if e.fp else ""
+            return {"status_code": e.code, "error": err_body}
+        except Exception as e:
+            return {"status_code": 500, "error": str(e)}
+
     async def execute_chat_completion(
         self, 
         role: str, 
         messages: List[Dict[str, str]], 
         tools: Optional[List[Dict[str, Any]]] = None,
         max_retries: int = 3
-    ) -> Any:
-        client = self.get_client(role)
+    ) -> Dict[str, Any]:
+        """Panggilan async ke Atria-Dawn-Preview dengan auto-retry & rotasi 429."""
         attempts = 0
+        current_key = self.get_api_key(role)
+
+        payload: Dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.2,
+        }
+        if tools:
+            payload["tools"] = tools
 
         while attempts < max_retries:
-            try:
-                params = {
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": 0.2,
-                }
-                if tools:
-                    params["tools"] = tools
+            # Jalankan di background thread agar tidak memblokir event loop
+            res = await asyncio.to_thread(self._sync_http_post, current_key, payload)
 
-                return await client.chat.completions.create(**params)
+            if res.get("status_code") == 200:
+                return res["data"]
 
-            except Exception as e:
-                err_str = str(e).lower()
-                if "429" in err_str or "rate" in err_str:
-                    print(f"[WARN] [{role}] HTTP 429 Rate Limit terdeteksi: {e}")
-                    new_key = self.rotate_key_for_role(role)
-                    if not new_key:
-                        raise RuntimeError("Semua API key cadangan di .env habis!")
-                    client = AsyncOpenAI(base_url=self.api_base, api_key=new_key)
-                    attempts += 1
-                    await asyncio.sleep(1)
-                else:
-                    print(f"[ERROR] [{role}] Error API: {e}")
-                    attempts += 1
-                    await asyncio.sleep(2)
+            # Tangani rate limit HTTP 429
+            if res.get("status_code") == 429:
+                print(f"[WARN] [{role}] HTTP 429 Rate Limit terdeteksi dari Atria!")
+                new_key = self.rotate_key_for_role(role)
+                if not new_key:
+                    raise RuntimeError("Semua API key cadangan di .env habis!")
+                current_key = new_key
+                attempts += 1
+                await asyncio.sleep(1)
+            else:
+                err_msg = res.get("error", "Unknown error")
+                print(f"[ERROR] [{role}] HTTP {res.get('status_code')}: {err_msg}")
+                attempts += 1
+                await asyncio.sleep(2)
 
         raise RuntimeError(f"Gagal mengeksekusi request untuk agent '{role}' setelah {max_retries} percobaan.")
