@@ -240,12 +240,15 @@ def main():
         elif choice == "6":
             print(f"\n{C_GREEN}🚀 Menjalankan Web UI Dashboard di http://localhost:3000...{C_RESET}")
             print(f"{C_DIM}Buka browser Chrome di HP kamu dan akses:{C_RESET} {C_BOLD}http://localhost:3000{C_RESET}")
-            print(f"{C_DIM}Tekan Ctrl+C untuk kembali ke menu CLI Termux.{C_RESET}\n")
+            print(f"{C_DIM}Tekan Ctrl+C untuk berhenti dan kembali ke menu.{C_RESET}\n")
+            server_dir = "dist" if os.path.exists("dist") else "."
             try:
-                subprocess.run(["npm", "run", "dev"])
+                # Menggunakan server HTTP bawaan Python (100% tanpa butuh vite / npm!)
+                subprocess.run([sys.executable, "-m", "http.server", "3000", "--directory", server_dir])
+            except KeyboardInterrupt:
+                pass
             except Exception as e:
-                print(f"{C_RED}Gagal menjalankan npm run dev: {e}{C_RESET}")
-                print(f"{C_YELLOW}Pastikan nodejs terpasang: pkg install nodejs -y && npm install{C_RESET}")
+                print(f"{C_RED}Gagal menjalankan server: {e}{C_RESET}")
             input(f"\n{C_DIM}Tekan Enter untuk kembali ke menu...{C_RESET}")
         elif choice == "0":
             print(f"\n{C_GREEN}Sampai jumpa! Sistem multi-agent dihentikan.{C_RESET}\n")
