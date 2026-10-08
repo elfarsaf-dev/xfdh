@@ -9,14 +9,35 @@
     <meta property="og:description" content="Real-time monitoring dashboard and live preview for 7-agent Termux multi-agent system with key rotation and workspace isolation." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/src/index.css" />
+
+    <!-- Tailwind CSS CDN: Menjamin 100% tampilan styling selalu jalan di browser apa pun tanpa butuh npm/vite! -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              slate: { 950: '#070a10', 900: '#0f172a', 800: '#1e293b', 700: '#334155' }
+            }
+          }
+        }
+      }
+    </script>
+    
+    <style>
+      body {
+        background-color: #070a10;
+        color: #e2e8f0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: #070a10; }
+      ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
   </head>
   <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-slate-950">
-    
-    <!-- Toast Notification for Failover -->
-    <div id="failover-toast" class="hidden fixed top-4 right-4 z-50 bg-rose-900 border border-rose-500 text-rose-100 px-4 py-2.5 rounded-lg shadow-2xl font-mono text-xs flex items-center gap-2 animate-bounce">
-      ⚡ Key #2 limit 429! Otomatis rotasi ke Key #4
-    </div>
 
     <!-- Top System Header -->
     <header class="bg-slate-900/90 border-b border-slate-800 backdrop-blur sticky top-0 z-40">
@@ -25,95 +46,71 @@
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2">
             <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span class="font-mono font-black text-sm tracking-tight text-emerald-400">&gt; ATRIA_DAWN / TERMUX</span>
+            <span class="font-mono font-black text-sm tracking-tight text-emerald-400">&gt; ATRIA_DAWN / REAL MONITORING</span>
           </div>
           <span class="text-slate-600">|</span>
           <div class="flex items-center gap-2 text-[11px] font-mono text-slate-400">
-            <span class="bg-slate-800 px-2 py-0.5 rounded text-emerald-300">PID: 14209</span>
-            <span class="hidden sm:inline">⚡ Baterai: 84%</span>
-            <span class="hidden md:inline">RAM: 1.8 / 6 GB</span>
-            <span class="bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 px-1.5 py-0.2 rounded text-[10px]">WakeLock: ON</span>
+            <span class="bg-slate-800 px-2 py-0.5 rounded text-emerald-300">Model: Atria-Dawn-Preview</span>
+            <span class="bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 px-1.5 py-0.5 rounded text-[10px]">Folder: tasks/ (Real)</span>
           </div>
         </div>
 
-        <!-- Global Action Controls -->
+        <!-- Global Action Controls (REAL ACTIONS ONLY) -->
         <div class="flex items-center gap-2">
           <button 
-            id="btn-test-429" 
-            class="px-2.5 py-1 text-xs font-mono bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded transition cursor-pointer flex items-center gap-1"
-            title="Simulasikan Key #2 terkena limit 429 dan uji rotasi otomatis ke key cadangan"
+            id="btn-refresh-real-data" 
+            class="px-3 py-1.5 text-xs font-mono bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded transition cursor-pointer flex items-center gap-1.5 font-bold"
+            title="Muat ulang data riil dari disk folder tasks/"
           >
-            <span>⚡ Tes 429 Failover</span>
-          </button>
-          
-          <button 
-            id="btn-simulate-step" 
-            class="px-2.5 py-1 text-xs font-mono bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded transition cursor-pointer flex items-center gap-1"
-            title="Jalankan satu langkah kemajuan tugas"
-          >
-            <span>⏩ Step +1</span>
+            <span>🔄 Segarkan Data</span>
           </button>
 
           <button 
-            id="btn-toggle-auto-sim" 
-            class="px-3 py-1 text-xs font-mono bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded transition cursor-pointer flex items-center gap-1"
+            id="btn-run-active-task" 
+            class="px-3 py-1.5 text-xs font-mono bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded transition cursor-pointer flex items-center gap-1.5 shadow-lg shadow-emerald-950/50"
+            title="Jalankan Mandor & Worker secara riil di Termux untuk tugas ini"
           >
-            <span>▶ Putar Simulasi</span>
-          </button>
-
-          <button 
-            id="btn-new-task" 
-            class="px-3 py-1 text-xs font-mono bg-sky-600 hover:bg-sky-500 text-slate-950 font-bold rounded transition cursor-pointer flex items-center gap-1"
-          >
-            <span>+ Task Baru</span>
+            <span>🚀 Jalankan Mandor</span>
           </button>
 
           <button 
             id="btn-scripts-modal" 
-            class="px-2.5 py-1 text-xs font-mono bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800 rounded transition cursor-pointer flex items-center gap-1"
-            title="Lihat & Salin Script Lengkap untuk Termux (init-task.sh, keys.json, rotator, mandor)"
+            class="px-3 py-1.5 text-xs font-mono bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800 rounded transition cursor-pointer flex items-center gap-1"
+            title="Lihat Script Termux"
           >
             <span>📦 Script Termux</span>
-          </button>
-
-          <button 
-            id="btn-keys-manage" 
-            class="p-1.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-800 rounded border border-slate-700 cursor-pointer"
-            title="Kelola 7 API Key"
-          >
-            🔑
           </button>
         </div>
       </div>
 
       <!-- 7 API Key Pool Status Strip -->
-      <div class="px-4 py-1.5 bg-slate-950/90 border-t border-slate-900 overflow-x-auto flex items-center gap-2 scrollbar-none" id="key-pool-strip">
-        <!-- Rendered by main.ts -->
+      <div class="px-4 py-1.5 bg-slate-950/90 border-t border-slate-900 overflow-x-auto flex items-center gap-2" id="key-pool-strip">
+        <!-- Rendered dynamically -->
       </div>
     </header>
 
     <!-- Main Workspace Container: 3 Columns Grid -->
     <main class="flex-1 p-3 md:p-4 grid grid-cols-1 lg:grid-cols-12 gap-3 md:gap-4 overflow-hidden">
       
-      <!-- KOLOM 1: DAFTAR TUGAS (3 cols) -->
+      <!-- KOLOM 1: DAFTAR TUGAS NYATA (3 cols) -->
       <section class="lg:col-span-3 flex flex-col bg-slate-900/60 rounded-xl border border-slate-800 p-3 h-full max-h-[85vh]">
         <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
           <div class="flex items-center gap-2">
-            <span class="text-base">📋</span>
-            <h2 class="text-xs font-bold font-mono tracking-wider text-slate-200 uppercase">DAFTAR TUGAS</h2>
+            <span class="text-base">📁</span>
+            <h2 class="text-xs font-bold font-mono tracking-wider text-slate-200 uppercase">TUGAS NYATA DI DISK</h2>
           </div>
-          <span class="text-[10px] font-mono text-slate-500">~/tasks/</span>
+          <span id="task-count-badge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">0 task</span>
         </div>
 
         <!-- Task List Scrollable -->
         <div class="flex-1 overflow-y-auto pr-1" id="task-list-container">
-          <!-- Rendered dynamically by main.ts -->
+          <div class="p-4 text-center text-slate-500 text-xs">Memuat daftar tugas dari folder tasks/...</div>
         </div>
 
         <!-- Foot Info -->
         <div class="pt-2 mt-2 border-t border-slate-800/80 text-[11px] font-mono text-slate-400 flex items-center justify-between">
-          <span>Isolasi Folder: Aktif</span>
-          <span class="text-emerald-400 font-semibold">1 Task = 1 Dir</span>
+          <span>Path: <code class="text-emerald-400">./tasks/</code></span>
+          <span class="text-slate-400">Disk Sync</span>
         </div>
       </section>
 
@@ -126,35 +123,36 @@
             <div>
               <div class="flex items-center gap-2">
                 <span id="task-detail-status-badge" class="text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-emerald-950 text-emerald-400 border border-emerald-800">
-                  RUNNING
+                  READY
                 </span>
                 <span id="task-detail-path" class="text-[11px] font-mono text-slate-400 truncate">
-                  ~/agent-workspace/tasks/2026-10-08-001-bikin-login/
+                  tasks/
                 </span>
               </div>
               <h3 id="task-detail-title" class="text-sm font-bold text-slate-100 mt-1">
-                Bikin Modul Autentikasi & Login JWT
+                Pilih tugas dari daftar di sebelah kiri
               </h3>
             </div>
-            <span id="task-detail-progress-text" class="text-xs font-mono font-bold text-emerald-400">75%</span>
+            <span id="task-detail-progress-text" class="text-xs font-mono font-bold text-emerald-400">0%</span>
           </div>
 
-          <p id="task-detail-desc" class="text-xs text-slate-400 mb-2.5">
-            Sistem login lengkap dengan form validasi, endpoint JWT /api/auth/login, rate-limiting, dan preview responsive.
-          </p>
+          <div class="flex items-center justify-between text-[11px] text-slate-400 mb-2">
+            <span>Dibuat: <span id="task-detail-created" class="text-slate-300">-</span></span>
+            <span>Port: <span id="task-detail-ports" class="text-emerald-400 font-mono">:3001 / :5174</span></span>
+          </div>
 
           <!-- Overall Progress Bar -->
           <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
-            <div id="task-detail-progress-bar" class="h-full bg-gradient-to-r from-emerald-500 to-sky-400 transition-all duration-500" style="width: 75%"></div>
+            <div id="task-detail-progress-bar" class="h-full bg-gradient-to-r from-emerald-500 to-sky-400 transition-all duration-500" style="width: 10%"></div>
           </div>
         </div>
 
         <!-- 4 Worker Agents Cards Grid -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5" id="worker-cards-grid">
-          <!-- Rendered dynamically by main.ts -->
+          <!-- Rendered dynamically -->
         </div>
 
-        <!-- Sandboxed Files & Contract Explorer -->
+        <!-- Sandboxed Files & Contract Explorer (BACA FILE NYATA) -->
         <div class="bg-slate-900/80 rounded-xl border border-slate-800 overflow-hidden flex flex-col flex-1">
           <div class="bg-slate-950 px-3 pt-2 border-b border-slate-800 flex items-center justify-between">
             <div class="flex items-center gap-1 overflow-x-auto">
@@ -165,13 +163,16 @@
                 task.json
               </button>
               <button data-inspect-tab="backend" class="px-3 py-1.5 text-xs font-mono text-slate-400 hover:text-slate-200 cursor-pointer">
-                backend/src/
+                backend/src/server.js
               </button>
               <button data-inspect-tab="frontend" class="px-3 py-1.5 text-xs font-mono text-slate-400 hover:text-slate-200 cursor-pointer">
-                frontend/src/
+                frontend/src/index.html
               </button>
               <button data-inspect-tab="output" class="px-3 py-1.5 text-xs font-mono text-slate-400 hover:text-slate-200 cursor-pointer">
-                output/
+                output/index.html
+              </button>
+              <button data-inspect-tab="audit" class="px-3 py-1.5 text-xs font-mono text-slate-400 hover:text-slate-200 cursor-pointer">
+                audit.log
               </button>
             </div>
             <button id="btn-copy-contract" class="text-[11px] font-mono text-slate-400 hover:text-emerald-400 px-2 py-0.5 rounded cursor-pointer">
@@ -181,60 +182,32 @@
 
           <div class="px-3 py-1 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
             <span id="code-viewer-path">shared/api-contract.json</span>
-            <span>UTF-8 &bull; JSON</span>
+            <span>Berkas Nyata di Disk</span>
           </div>
 
-          <div class="p-3 bg-slate-950 overflow-auto flex-1 max-h-[160px]">
-            <pre id="code-viewer-content" class="text-xs font-mono text-sky-300 leading-relaxed"></pre>
+          <div class="p-3 bg-slate-950 overflow-auto flex-1 max-h-[180px]">
+            <pre id="code-viewer-content" class="text-xs font-mono text-sky-300 leading-relaxed">Pilih tab berkas di atas untuk melihat isi kode nyata dari disk.</pre>
           </div>
         </div>
 
       </section>
 
-      <!-- KOLOM 3: LIVE PREVIEW & IFRAME CONTROLLER (4 cols) -->
+      <!-- KOLOM 3: LIVE PREVIEW DARI FILE NYATA (4 cols) -->
       <section class="lg:col-span-4 flex flex-col bg-slate-900/60 rounded-xl border border-slate-800 overflow-hidden h-full max-h-[85vh]">
         <!-- Preview Navigation Header -->
         <div class="p-2.5 bg-slate-900 border-b border-slate-800 flex flex-col gap-2">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="text-base">🌐</span>
-              <h2 class="text-xs font-bold font-mono tracking-wider text-slate-200 uppercase">LIVE PREVIEW</h2>
+              <h2 class="text-xs font-bold font-mono tracking-wider text-slate-200 uppercase">HASIL PREVIEW NYATA</h2>
             </div>
             
-            <!-- Device View Mode -->
-            <div class="flex items-center bg-slate-950 rounded p-0.5 border border-slate-800">
-              <button data-device-mode="responsive" class="px-2 py-0.5 text-[10px] font-mono rounded bg-slate-800 text-slate-100 cursor-pointer" title="Responsive View">
-                Fluid
-              </button>
-              <button data-device-mode="mobile" class="px-2 py-0.5 text-[10px] font-mono rounded text-slate-400 hover:text-slate-200 cursor-pointer" title="Mobile Frame (Android)">
-                📱 HP
-              </button>
-              <button data-device-mode="desktop" class="px-2 py-0.5 text-[10px] font-mono rounded text-slate-400 hover:text-slate-200 cursor-pointer" title="Tablet / Desktop Frame">
-                💻 PC
-              </button>
-            </div>
-          </div>
-
-          <!-- Preview Tabs & Address Bar -->
-          <div class="flex items-center justify-between gap-1.5">
             <div class="flex items-center gap-1">
-              <button data-preview-tab="frontend" class="px-2.5 py-1 text-xs font-mono rounded bg-slate-800 text-emerald-400 border border-slate-700 font-semibold cursor-pointer">
-                Frontend (:5174)
+              <button id="btn-refresh-preview" class="p-1 px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer flex items-center gap-1" title="Reload iframe">
+                <span>🔄 Reload</span>
               </button>
-              <button data-preview-tab="backend" class="px-2.5 py-1 text-xs font-mono rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 cursor-pointer">
-                API Test (:3001)
-              </button>
-              <button data-preview-tab="split" class="px-2.5 py-1 text-xs font-mono rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 cursor-pointer">
-                Split
-              </button>
-            </div>
-
-            <div class="flex items-center gap-1">
-              <button id="btn-refresh-preview" class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer" title="Reload Preview">
-                🔄
-              </button>
-              <button id="btn-open-newtab-preview" class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer" title="Buka Tab Baru">
-                ↗
+              <button id="btn-open-newtab-preview" class="p-1 px-2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 hover:bg-emerald-900 text-xs cursor-pointer flex items-center gap-1 font-bold" title="Buka di tab baru">
+                <span>↗ Buka Tab</span>
               </button>
             </div>
           </div>
@@ -242,155 +215,45 @@
           <!-- URL Bar -->
           <div class="flex items-center gap-2 bg-slate-950 px-2.5 py-1 rounded border border-slate-800 text-[11px] font-mono text-slate-300">
             <span class="text-emerald-400">🔒</span>
-            <span id="preview-url-display" class="truncate flex-1">http://localhost:5174/</span>
-            <span class="text-[9px] px-1 rounded bg-slate-800 text-slate-400">sandbox</span>
+            <span id="preview-url-display" class="truncate flex-1">/preview/...</span>
+            <span class="text-[9px] px-1 rounded bg-slate-800 text-emerald-400">output file</span>
           </div>
         </div>
 
-        <!-- Preview Interactive Canvas / Iframe -->
+        <!-- Preview Real Iframe -->
         <div class="flex-1 bg-slate-950 p-2 overflow-auto flex items-center justify-center">
-          <div id="preview-frame-wrapper" class="w-full h-full rounded-lg overflow-hidden border border-slate-800 shadow-inner bg-slate-900 transition-all duration-300">
-            <div id="preview-content-area" class="w-full h-full">
-              <!-- Rendered by main.ts -->
-            </div>
+          <div class="w-full h-full rounded-lg overflow-hidden border border-slate-800 shadow-inner bg-slate-900">
+            <iframe id="preview-iframe" class="w-full h-full border-0 bg-white" src="about:blank"></iframe>
           </div>
         </div>
 
         <div class="p-2 bg-slate-950/80 border-t border-slate-800 text-[10px] font-mono text-slate-500 flex items-center justify-between">
-          <span>X-Frame-Options: ALLOW</span>
-          <span class="text-slate-400">Atria Virtual Live Preview</span>
+          <span>Menampilkan: output/index.html</span>
+          <span class="text-emerald-400">Live Preview</span>
         </div>
       </section>
 
     </main>
 
-    <!-- Stuck Agent Alert Banner (Displays if heartbeat timer triggers) -->
-    <div id="alert-stuck-banner" class="hidden mx-4 mb-2 p-2.5 rounded-lg bg-amber-950/90 border border-amber-600 text-amber-200 flex items-center justify-between gap-3 text-xs font-mono">
-      <div class="flex items-center gap-2">
-        <span class="text-base animate-bounce">⚠️</span>
-        <span>Peringatan: Agent tidak merespons update selama <span id="stuck-timer-countdown">0:30</span>. Kemungkinan kena Android Doze / CPU Throttling!</span>
-      </div>
-      <button id="btn-wake-stuck" class="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded cursor-pointer transition">
-        ⚡ Kirim Wake Ping / Reset Timer
-      </button>
-    </div>
-
-    <!-- BAGIAN BAWAH: LOG REAL-TIME TERMINAL -->
+    <!-- BAGIAN BAWAH: LOG MONITORING NYATA -->
     <footer class="bg-slate-900/95 border-t border-slate-800 px-4 py-2">
       <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800/80 text-xs font-mono">
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2">
             <span class="text-emerald-400">📜</span>
-            <span class="font-bold text-slate-200">LOG REAL-TIME (SSE / STREAM)</span>
-            <span id="log-count-badge" class="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">10 baris</span>
-          </div>
-
-          <!-- Agent Filters -->
-          <div class="hidden sm:flex items-center gap-1 text-[11px]">
-            <button data-log-filter="all" class="px-2 py-0.5 rounded bg-slate-800 text-slate-100 font-bold cursor-pointer">Semua</button>
-            <button data-log-filter="mandor" class="px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 cursor-pointer">👑 Mandor</button>
-            <button data-log-filter="backend" class="px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 cursor-pointer">🛠️ Backend</button>
-            <button data-log-filter="frontend" class="px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 cursor-pointer">🎨 Frontend</button>
-            <button data-log-filter="monitoring" class="px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 cursor-pointer">🔍 Monitor</button>
-            <button data-log-filter="keypool" class="px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 cursor-pointer">🔑 Key Pool</button>
+            <span class="font-bold text-slate-200">LOG STATUS MONITORING</span>
           </div>
         </div>
 
         <div class="flex items-center gap-2 text-[11px]">
-          <button id="btn-clear-logs" class="text-slate-400 hover:text-rose-400 cursor-pointer">Bersihkan Log</button>
+          <button id="btn-clear-logs" class="text-slate-400 hover:text-rose-400 cursor-pointer">Bersihkan Layar</button>
         </div>
       </div>
 
-      <!-- Log Terminal Container -->
-      <div id="log-stream-container" class="h-28 overflow-y-auto bg-slate-950 rounded border border-slate-800 p-1 font-mono text-xs select-text">
-        <!-- Rendered dynamically by main.ts -->
+      <div id="log-stream-container" class="h-24 overflow-y-auto bg-slate-950 rounded border border-slate-800 p-2 font-mono text-xs select-text">
+        <div class="text-slate-400">[SYSTEM] Dashboard terhubung ke server lokal. Siap memantau folder tasks/</div>
       </div>
     </footer>
-
-    <!-- MODAL: BUAT TUGAS BARU -->
-    <div id="modal-new-task" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs items-center justify-center p-4">
-      <div class="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-md shadow-2xl">
-        <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
-          <h3 class="text-sm font-bold font-mono text-slate-100">➕ Buat Tugas Baru (Isolasi Folder)</h3>
-          <button id="modal-new-task-close" class="text-slate-400 hover:text-slate-200 cursor-pointer">&times;</button>
-        </div>
-
-        <form id="form-new-task" class="space-y-3 font-mono text-xs">
-          <div>
-            <label class="block text-slate-300 mb-1">Judul Tugas / Fitur</label>
-            <input 
-              type="text" 
-              id="input-task-title" 
-              placeholder="Contoh: Bikin Dashboard Crypto Real-time" 
-              class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-100 focus:outline-none focus:border-emerald-500" 
-              required
-            />
-          </div>
-
-          <div>
-            <label class="block text-slate-300 mb-1">Deskripsi Singkat / Prompt Mandor</label>
-            <textarea 
-              id="input-task-desc" 
-              rows="3" 
-              placeholder="Jelaskan kebutuhan API dan tampilan UI..." 
-              class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-100 focus:outline-none focus:border-emerald-500"
-            ></textarea>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-slate-300 mb-1">Port Backend</label>
-              <input 
-                type="number" 
-                id="input-task-backend-port" 
-                value="3003" 
-                class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-slate-100" 
-              />
-            </div>
-            <div>
-              <label class="block text-slate-300 mb-1">Port Frontend</label>
-              <input 
-                type="number" 
-                id="input-task-frontend-port" 
-                value="5176" 
-                class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-slate-100" 
-              />
-            </div>
-          </div>
-
-          <div class="text-[11px] text-slate-400 bg-slate-950/80 p-2 rounded border border-slate-800">
-            ℹ️ Sistem akan mengalokasikan folder baru di <code>~/agent-workspace/tasks/YYYY-MM-DD-00X-slug/</code> dan menugaskan Mandor untuk memecah subtask.
-          </div>
-
-          <div class="flex items-center justify-end gap-2 pt-2">
-            <button type="button" id="modal-new-task-cancel" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer">
-              Batal
-            </button>
-            <button type="submit" class="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold cursor-pointer">
-              Mulai Tugas
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- MODAL: KELOLA 7 API KEY & ROTASI -->
-    <div id="modal-keys" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs items-center justify-center p-4">
-      <div class="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-lg shadow-2xl">
-        <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
-          <h3 class="text-sm font-bold font-mono text-slate-100">🔑 Manajemen Pool 7 API Key & Rotasi</h3>
-          <button id="modal-keys-close" class="text-slate-400 hover:text-slate-200 cursor-pointer">&times;</button>
-        </div>
-
-        <div class="text-xs text-slate-400 mb-3 font-mono">
-          Rotasi otomatis terjadi saat worker menerima error <strong class="text-rose-400">HTTP 429 Too Many Requests</strong>. Worker langsung dialihkan ke Key Cadangan tanpa merestart proses.
-        </div>
-
-        <div id="modal-keys-list" class="max-h-80 overflow-y-auto pr-1">
-          <!-- Rendered dynamically by main.ts -->
-        </div>
-      </div>
-    </div>
 
     <!-- MODAL: SCRIPT TERMUX (COPY & RUN READY) -->
     <div id="modal-scripts" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-xs items-center justify-center p-4">
@@ -407,10 +270,8 @@
           <div class="flex items-center gap-1 overflow-x-auto" id="script-selector-tabs">
             <button data-script-name="main" class="px-2.5 py-1 rounded bg-slate-800 text-emerald-300 font-bold cursor-pointer">python main.py</button>
             <button data-script-name="env" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 cursor-pointer">.env</button>
-            <button data-script-name="init" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 cursor-pointer">init-task.sh</button>
             <button data-script-name="rotator" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 cursor-pointer">client_rotator.py</button>
             <button data-script-name="mandor" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 cursor-pointer">mandor.py</button>
-            <button data-script-name="tools" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 cursor-pointer">worker_tools.py</button>
           </div>
           <button id="btn-copy-active-script" class="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-slate-950 font-bold rounded cursor-pointer transition text-[11px] shrink-0">
             📋 Salin Kode
@@ -418,17 +279,274 @@
         </div>
 
         <div class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 overflow-auto font-mono text-xs">
-          <pre id="script-code-display" class="text-slate-300 selection:bg-purple-500 selection:text-slate-950"></pre>
-        </div>
-
-        <div class="pt-3 mt-3 border-t border-slate-800 text-[11px] font-mono text-slate-400 flex items-center justify-between">
-          <span>Target Model: <code class="text-emerald-400 font-bold">Atria-Dawn-Preview</code></span>
-          <span>API: <code class="text-sky-400 font-bold">https://api.atria-asi.ai/v1</code></span>
+          <pre id="script-code-display" class="text-slate-300"></pre>
         </div>
       </div>
     </div>
 
-    <!-- Pure Vanilla TS logic entry point (NO REACT) -->
-    <script type="module" src="/src/main.ts"></script>
+    <!-- PURE STANDALONE JAVASCRIPT: Mengambil Data Asli dari Backend /api/tasks -->
+    <script>
+      (function() {
+        let currentTasks = [];
+        let activeTaskId = "";
+        let activeInspectTab = "contract";
+
+        // DOM elements
+        const taskListEl = document.getElementById("task-list-container");
+        const taskCountEl = document.getElementById("task-count-badge");
+        const titleEl = document.getElementById("task-detail-title");
+        const pathEl = document.getElementById("task-detail-path");
+        const statusBadgeEl = document.getElementById("task-detail-status-badge");
+        const progressTextEl = document.getElementById("task-detail-progress-text");
+        const progressBarEl = document.getElementById("task-detail-progress-bar");
+        const createdEl = document.getElementById("task-detail-created");
+        const portsEl = document.getElementById("task-detail-ports");
+        const workerCardsEl = document.getElementById("worker-cards-grid");
+        const codeContentEl = document.getElementById("code-viewer-content");
+        const codePathEl = document.getElementById("code-viewer-path");
+        const iframeEl = document.getElementById("preview-iframe");
+        const previewUrlEl = document.getElementById("preview-url-display");
+        const logStreamEl = document.getElementById("log-stream-container");
+
+        function addLog(msg, type = "info") {
+          const timeStr = new Date().toLocaleTimeString();
+          const div = document.createElement("div");
+          div.className = "py-0.5 border-b border-slate-900";
+          div.innerHTML = `<span class="text-slate-500">[${timeStr}]</span> <span class="${type === 'error' ? 'text-rose-400 font-bold' : (type === 'success' ? 'text-emerald-400' : 'text-slate-300')}">${msg}</span>`;
+          logStreamEl.appendChild(div);
+          logStreamEl.scrollTop = logStreamEl.scrollHeight;
+        }
+
+        // 1. Fetch Real Tasks dari backend
+        async function fetchTasks() {
+          try {
+            const res = await fetch("/api/tasks");
+            if (!res.ok) throw new Error("Gagal mengambil daftar tugas");
+            currentTasks = await res.json();
+            renderTaskList();
+            if (currentTasks.length > 0 && !activeTaskId) {
+              selectTask(currentTasks[0].id);
+            } else if (activeTaskId) {
+              const current = currentTasks.find(t => t.id === activeTaskId);
+              if (current) renderTaskDetail(current);
+            }
+          } catch (e) {
+            taskListEl.innerHTML = `<div class="p-3 text-amber-400 text-xs">Menunggu koneksi backend (/api/tasks)...<br><span class="text-slate-500 text-[10px]">Jalankan server via 'python main.py' menu [6]</span></div>`;
+          }
+        }
+
+        // 2. Fetch Keys dari .env
+        async function fetchKeys() {
+          try {
+            const res = await fetch("/api/keys");
+            if (!res.ok) return;
+            const keys = await res.json();
+            const strip = document.getElementById("key-pool-strip");
+            strip.innerHTML = keys.map(k => `
+              <div class="flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] ${k.status === 'active' ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : 'bg-slate-900 text-slate-400 border-slate-700'}">
+                <span class="font-bold">${k.label}</span>
+                <span class="opacity-75 uppercase text-[9px]">${k.role}</span>
+                <span class="text-[9px] text-slate-400">(${k.masked})</span>
+              </div>
+            `).join("");
+          } catch (e) {}
+        }
+
+        function renderTaskList() {
+          taskCountEl.textContent = `${currentTasks.length} task`;
+          if (currentTasks.length === 0) {
+            taskListEl.innerHTML = `<div class="p-4 text-center text-slate-500 text-xs">Belum ada tugas di folder tasks/.<br>Gunakan terminal 'python main.py' untuk buat tugas.</div>`;
+            return;
+          }
+
+          taskListEl.innerHTML = currentTasks.map(t => {
+            const isSel = t.id === activeTaskId;
+            const isDone = t.status === "COMPLETED" || t.status === "DONE";
+            const statusColor = isDone ? "text-emerald-400" : (t.status === "READY" ? "text-slate-400" : "text-amber-400");
+            return `
+              <button data-id="${t.id}" class="w-full text-left p-2.5 rounded-lg border mb-1.5 transition cursor-pointer ${isSel ? 'bg-slate-800 border-emerald-500 ring-1 ring-emerald-500/30' : 'bg-slate-900/60 border-slate-800 hover:bg-slate-800/40'}">
+                <div class="flex items-center justify-between text-xs font-bold mb-1">
+                  <span class="truncate ${isSel ? 'text-emerald-300' : 'text-slate-200'}">${t.id}</span>
+                  <span class="${statusColor} text-[10px] font-mono">${t.status}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 bg-slate-950 rounded-full h-1.5 overflow-hidden">
+                    <div class="h-full ${isDone ? 'bg-emerald-400' : 'bg-sky-500'}" style="width: ${t.overallProgress}%"></div>
+                  </div>
+                  <span class="text-[10px] text-slate-400 font-mono">${t.overallProgress}%</span>
+                </div>
+              </button>
+            `;
+          }).join("");
+
+          taskListEl.querySelectorAll("[data-id]").forEach(btn => {
+            btn.addEventListener("click", () => {
+              selectTask(btn.getAttribute("data-id"));
+            });
+          });
+        }
+
+        function selectTask(id) {
+          activeTaskId = id;
+          const task = currentTasks.find(t => t.id === id);
+          if (task) {
+            renderTaskDetail(task);
+            renderTaskList();
+            fetchTaskFile(activeInspectTab);
+            updatePreview(id);
+          }
+        }
+
+        function renderTaskDetail(t) {
+          titleEl.textContent = t.title || t.id;
+          pathEl.textContent = `tasks/${t.id}/`;
+          statusBadgeEl.textContent = t.status;
+          statusBadgeEl.className = `text-[10px] px-2 py-0.5 rounded font-mono font-medium ${t.status === 'COMPLETED' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}`;
+          progressTextEl.textContent = `${t.overallProgress}%`;
+          progressBarEl.style.width = `${t.overallProgress}%`;
+          createdEl.textContent = t.createdAt;
+          portsEl.textContent = `:${t.backendPort} / :${t.frontendPort}`;
+
+          // Worker Cards
+          const isDone = t.status === "COMPLETED";
+          workerCardsEl.innerHTML = `
+            <div class="p-3 rounded-lg border border-slate-800 bg-slate-900/60">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">👑 Mandor</span>
+                <span class="text-[10px] font-mono text-slate-400">Key #1</span>
+              </div>
+              <div class="text-[11px] text-slate-300 font-mono bg-slate-950 p-1.5 rounded mb-1">
+                ${isDone ? '✓ Seluruh rencana selesai dirancang & difinalisasi' : (t.status === 'PLANNING' ? 'Sedang memecah tugas...' : 'Standby / Siap')}
+              </div>
+              <div class="text-[10px] text-slate-400 font-mono">Workdir: tasks/${t.id}/</div>
+            </div>
+
+            <div class="p-3 rounded-lg border border-slate-800 bg-slate-900/60">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">🛠️ Backend Agent</span>
+                <span class="text-[10px] font-mono text-slate-400">Key #2</span>
+              </div>
+              <div class="text-[11px] text-slate-300 font-mono bg-slate-950 p-1.5 rounded mb-1">
+                ${isDone ? '✓ server.js & api-contract.json selesai' : (t.status === 'BACKEND_IN_PROGRESS' ? 'Menulis route...' : 'Menunggu Mandor')}
+              </div>
+              <div class="text-[10px] text-slate-400 font-mono">Port :${t.backendPort} &bull; backend/</div>
+            </div>
+
+            <div class="p-3 rounded-lg border border-slate-800 bg-slate-900/60">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-sky-400 flex items-center gap-1.5">🎨 Frontend Agent</span>
+                <span class="text-[10px] font-mono text-slate-400">Key #3</span>
+              </div>
+              <div class="text-[11px] text-slate-300 font-mono bg-slate-950 p-1.5 rounded mb-1">
+                ${isDone ? '✓ index.html selesai dibuat' : (t.status === 'FRONTEND_IN_PROGRESS' ? 'Membuat antarmuka...' : 'Menunggu API')}
+              </div>
+              <div class="text-[10px] text-slate-400 font-mono">Port :${t.frontendPort} &bull; frontend/</div>
+            </div>
+
+            <div class="p-3 rounded-lg border border-slate-800 bg-slate-900/60">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-purple-400 flex items-center gap-1.5">🔍 Monitoring Agent</span>
+                <span class="text-[10px] font-mono text-slate-400">Key #7</span>
+              </div>
+              <div class="text-[11px] text-slate-300 font-mono bg-slate-950 p-1.5 rounded mb-1">
+                ${isDone ? '✓ Audit lulus: 0 error' : 'Menunggu hasil worker'}
+              </div>
+              <div class="text-[10px] text-slate-400 font-mono">Audit: logs/audit.log</div>
+            </div>
+          `;
+        }
+
+        // 3. Fetch Real File Content dari disk
+        async function fetchTaskFile(type) {
+          activeInspectTab = type;
+          codePathEl.textContent = `tasks/${activeTaskId}/${type}`;
+
+          document.querySelectorAll("[data-inspect-tab]").forEach(btn => {
+            const t = btn.getAttribute("data-inspect-tab");
+            if (t === type) {
+              btn.className = "px-3 py-1.5 text-xs font-mono font-medium rounded-t bg-slate-800 text-emerald-400 border-t border-x border-slate-700 cursor-pointer";
+            } else {
+              btn.className = "px-3 py-1.5 text-xs font-mono text-slate-400 hover:text-slate-200 cursor-pointer";
+            }
+          });
+
+          if (!activeTaskId) return;
+          try {
+            const res = await fetch(`/api/task-files?task=${encodeURIComponent(activeTaskId)}&type=${type}`);
+            const text = await res.text();
+            codeContentEl.textContent = text;
+          } catch (e) {
+            codeContentEl.textContent = `Gagal membaca berkas: ${e.message}`;
+          }
+        }
+
+        function updatePreview(id) {
+          const url = `/preview/${encodeURIComponent(id)}`;
+          previewUrlEl.textContent = url;
+          iframeEl.src = url;
+        }
+
+        // Event Listeners
+        document.getElementById("btn-refresh-real-data").addEventListener("click", () => {
+          addLog("Memuat ulang data riil dari folder tasks/...");
+          fetchTasks();
+          fetchKeys();
+        });
+
+        document.getElementById("btn-run-active-task").addEventListener("click", async () => {
+          if (!activeTaskId) {
+            alert("Pilih tugas terlebih dahulu!");
+            return;
+          }
+          addLog(`Mengirim sinyal eksekusi Mandor untuk ${activeTaskId}...`);
+          try {
+            const res = await fetch("/api/run-task", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ task_id: activeTaskId })
+            });
+            const data = await res.json();
+            addLog(`✓ ${data.message || 'Mandor sedang berjalan di Termux!'}`, "success");
+            setTimeout(fetchTasks, 3000);
+          } catch (e) {
+            addLog(`Gagal memicu eksekusi: ${e.message}`, "error");
+          }
+        });
+
+        document.getElementById("btn-refresh-preview").addEventListener("click", () => {
+          if (activeTaskId) updatePreview(activeTaskId);
+        });
+
+        document.getElementById("btn-open-newtab-preview").addEventListener("click", () => {
+          if (activeTaskId) window.open(`/preview/${encodeURIComponent(activeTaskId)}`, "_blank");
+        });
+
+        document.querySelectorAll("[data-inspect-tab]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            fetchTaskFile(btn.getAttribute("data-inspect-tab"));
+          });
+        });
+
+        document.getElementById("btn-clear-logs").addEventListener("click", () => {
+          logStreamEl.innerHTML = "";
+        });
+
+        // Script modal
+        const modalEl = document.getElementById("modal-scripts");
+        document.getElementById("btn-scripts-modal").addEventListener("click", () => {
+          modalEl.classList.remove("hidden");
+          modalEl.classList.add("flex");
+        });
+        document.getElementById("modal-scripts-close").addEventListener("click", () => {
+          modalEl.classList.add("hidden");
+          modalEl.classList.remove("flex");
+        });
+
+        // Initial Load & Auto Poll tiap 5 detik
+        fetchTasks();
+        fetchKeys();
+        setInterval(fetchTasks, 5000);
+      })();
+    </script>
   </body>
 </html>

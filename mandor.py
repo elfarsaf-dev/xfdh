@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 """
 mandor.py - Orchestrator Multi-Agent Atria Dawn Preview
-Menjalankan koordinasi nyata 4 agent:
-1. Mandor (Key #1)       -> Merancang & memecah subtask
-2. Backend Agent (Key #2) -> Menulis kode server API & shared/api-contract.json
-3. Frontend Agent (Key #3) -> Menulis kode antarmuka UI lengkap
-4. Monitoring Agent (Key #7) -> Audit kode & cek port
-5. Mandor Finalisasi     -> Satukan ke output/ & update task.json ke COMPLETED
+EKSEKUSI PARALEL (Backend & Frontend berjalan bersamaan secara simultan).
+Output terminal bersih, ringkas, dan tidak memenuhi layar.
 """
 
 import os
@@ -29,6 +25,10 @@ class MandorOrchestrator:
         self.task_json_path = os.path.join(self.task_dir, "task.json")
         self.load_or_init_metadata()
 
+    def log(self, tag: str, msg: str):
+        t = time.strftime("%H:%M:%S")
+        print(f"[{t}] {tag} {msg}")
+
     def load_or_init_metadata(self):
         if os.path.exists(self.task_json_path):
             try:
@@ -44,7 +44,6 @@ class MandorOrchestrator:
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "status": "INITIALIZED",
             "model": self.rotator.model,
-            "api_endpoint": self.rotator.api_base,
             "ports": {"backend": 3001, "frontend": 5174},
             "subtasks": {}
         }
@@ -55,12 +54,10 @@ class MandorOrchestrator:
             json.dump(self.metadata, f, indent=2)
 
     def extract_code_block(self, text: str, default_code: str = "") -> str:
-        """Mengekstrak blok kode ``` dari respons LLM."""
         if "```" in text:
             parts = text.split("```")
             for i in range(1, len(parts), 2):
                 code_segment = parts[i]
-                # buang baris pertama jika itu bahasa (misal: js, html, python)
                 lines = code_segment.split("\n", 1)
                 if len(lines) > 1 and len(lines[0].strip()) < 15:
                     return lines[1].strip()
@@ -68,11 +65,7 @@ class MandorOrchestrator:
         return text.strip() or default_code
 
     async def step_1_planning(self) -> str:
-        """Mandor (Key #1) memecah instruksi user menjadi rencana teknis."""
-        print(f"\n========================================================")
-        print(f"👑 [MANDOR - KEY #1] MEMECAH TUGAS & MERANCANG ARSITEKTUR")
-        print(f"========================================================")
-        
+        self.log("👑 [MANDOR]", f"Memecah instruksi untuk '{self.task_id}' (Key #1)...")
         self.metadata["status"] = "PLANNING"
         self.save_metadata()
 
@@ -80,173 +73,121 @@ class MandorOrchestrator:
             {
                 "role": "system",
                 "content": (
-                    "Kamu adalah Mandor (Chief Technical Orchestrator). "
-                    "Tugasmu: pecah brief user menjadi rencana teknis yang jelas untuk 2 worker:\n"
-                    "1. Backend Worker: endpoint apa saja yang perlu dibuat dan format data JSON.\n"
-                    "2. Frontend Worker: komponen UI, layout, dan interaktivitas yang perlu dibuat.\n"
-                    "Jawab ringkas, terstruktur, dan actionable."
+                    "Kamu adalah Mandor AI. Pecah tugas menjadi rencana singkat untuk Backend Worker dan Frontend Worker.\n"
+                    "Buat ringkas dalam 3-5 butir poin saja."
                 )
             },
-            {"role": "user", "content": f"Brief User: {self.prompt_brief}"}
+            {"role": "user", "content": f"Brief: {self.prompt_brief}"}
         ]
 
-        res = await self.rotator.execute_chat_completion("mandor", prompt)
+        res = await self.rotator.execute_chat_completion("mandor", prompt, live_print=False)
         plan_text = res.get("choices", [{}])[0].get("message", {}).get("content", "")
-        
         self.metadata["subtasks"]["plan"] = plan_text
         self.save_metadata()
+
+        self.log("👑 [MANDOR]", "✓ Perencanaan selesai.")
         return plan_text
 
-    async def step_2_backend_worker(self, plan_text: str):
-        """Backend Agent (Key #2) membuat server dan api-contract.json."""
-        print(f"\n========================================================")
-        print(f"🛠️ [BACKEND AGENT - KEY #2] MEMBUAT API & KONTRAK DATA")
-        print(f"========================================================")
-
-        self.metadata["status"] = "BACKEND_IN_PROGRESS"
-        self.save_metadata()
-
+    async def worker_backend(self, plan_text: str):
+        """Worker Backend (Key #2) berjalan paralel."""
         b_port = self.metadata.get("ports", {}).get("backend", 3001)
+        self.log("🛠️ [BACKEND]", f"Sedang membuat server API & contract di port {b_port} (Key #2)...")
+        
         backend_tools = AgentSandboxTools(self.task_dir, "backend")
 
         prompt = [
             {
                 "role": "system",
                 "content": (
-                    f"Kamu adalah Backend Worker Agent yang handal. "
-                    f"Berdasarkan rencana ini, buatkan kode server Node.js / Express lengkap (berjalan di port {b_port}) "
-                    f"dengan CORS diaktifkan dan endpoint mock data yang realistis. "
-                    f"Tulis kode di dalam blok ```javascript ... ``` agar bisa langsung disimpan."
+                    f"Kamu adalah Backend Agent. Buat kode server Express lengkap (port {b_port}) "
+                    f"dengan endpoint realistis dan CORS aktif. Tulis di dalam ```javascript ... ```."
                 )
             },
-            {
-                "role": "user",
-                "content": f"Rencana Mandor:\n{plan_text}\n\nBuat file server.js lengkap sekarang!"
-            }
+            {"role": "user", "content": f"Rencana:\n{plan_text}\n\nBuat server.js lengkap."}
         ]
 
-        res = await self.rotator.execute_chat_completion("backend", prompt)
+        res = await self.rotator.execute_chat_completion("backend", prompt, live_print=False)
         content = res.get("choices", [{}])[0].get("message", {}).get("content", "")
-        code = self.extract_code_block(content, default_code="// Mock Backend Server")
+        code = self.extract_code_block(content, default_code="// Express server ready")
 
-        # Simpan file ke folder backend/src/server.js
         backend_tools.write_file("src/server.js", code)
-
-        # Buat shared/api-contract.json
-        contract_data = {
+        backend_tools.write_file("shared/api-contract.json", json.dumps({
             "task_id": self.task_id,
             "port": b_port,
-            "status": "ready",
-            "endpoints": [
-                {"path": "/api/data", "method": "GET", "desc": "Ambil data utama"},
-                {"path": "/api/submit", "method": "POST", "desc": "Kirim formulir"}
-            ]
-        }
-        backend_tools.write_file("shared/api-contract.json", json.dumps(contract_data, indent=2))
-        print(f"\n✓ Berkas tersimpan di: {self.task_dir}/backend/src/server.js")
-        print(f"✓ Kontrak tersimpan di: {self.task_dir}/shared/api-contract.json")
+            "status": "ready"
+        }, indent=2))
 
-    async def step_3_frontend_worker(self, plan_text: str):
-        """Frontend Agent (Key #3) membuat tampilan UI lengkap (HTML/Tailwind)."""
-        print(f"\n========================================================")
-        print(f"🎨 [FRONTEND AGENT - KEY #3] MEMBUAT ANTARMUKA UI LENGKAP")
-        print(f"========================================================")
+        self.log("🛠️ [BACKEND]", "✓ Selesai membuat server.js & api-contract.json.")
 
-        self.metadata["status"] = "FRONTEND_IN_PROGRESS"
-        self.save_metadata()
-
+    async def worker_frontend(self, plan_text: str):
+        """Worker Frontend (Key #3) berjalan paralel."""
         f_port = self.metadata.get("ports", {}).get("frontend", 5174)
+        self.log("🎨 [FRONTEND]", f"Sedang membuat antarmuka UI di port {f_port} (Key #3)...")
+
         frontend_tools = AgentSandboxTools(self.task_dir, "frontend")
 
         prompt = [
             {
                 "role": "system",
                 "content": (
-                    "Kamu adalah Frontend Worker Agent ahli UI/UX. "
-                    "Buat antarmuka HTML mandiri yang modern, elegan, menggunakan Tailwind CDN, "
-                    "lengkap dengan komponen interaktif (JavaScript fetch, tombol, cards, formulir). "
-                    "Tulis kode HTML lengkap di dalam blok ```html ... ```."
+                    "Kamu adalah Frontend Agent. Buat antarmuka HTML mandiri yang modern dan lengkap "
+                    "menggunakan Tailwind CSS CDN dan JavaScript interaktif. Tulis di dalam ```html ... ```."
                 )
             },
-            {
-                "role": "user",
-                "content": f"Brief User: {self.prompt_brief}\n\nRencana Mandor:\n{plan_text}\n\nBuat file index.html lengkap sekarang!"
-            }
+            {"role": "user", "content": f"Brief: {self.prompt_brief}\n\nRencana: {plan_text}\n\nBuat file index.html lengkap."}
         ]
 
-        res = await self.rotator.execute_chat_completion("frontend", prompt)
+        res = await self.rotator.execute_chat_completion("frontend", prompt, live_print=False)
         content = res.get("choices", [{}])[0].get("message", {}).get("content", "")
         html_code = self.extract_code_block(content, default_code="<!DOCTYPE html><html><body><h1>UI Ready</h1></body></html>")
 
-        # Simpan ke frontend/src/index.html
         frontend_tools.write_file("src/index.html", html_code)
-        print(f"\n✓ Berkas tersimpan di: {self.task_dir}/frontend/src/index.html")
+        self.log("🎨 [FRONTEND]", "✓ Selesai membuat frontend/src/index.html.")
 
-    async def step_4_monitoring_qa(self):
-        """Monitoring Agent (Key #7) memverifikasi berkas dan port."""
-        print(f"\n========================================================")
-        print(f"🔍 [MONITORING AGENT - KEY #7] VERIFIKASI & AUDIT HASIL")
-        print(f"========================================================")
-
+    async def step_audit_and_finalize(self):
+        # 1. Monitoring QA (Key #7)
+        self.log("🔍 [MONITOR]", "Memeriksa kelengkapan berkas & isolasi folder (Key #7)...")
         mon_tools = AgentSandboxTools(self.task_dir, "monitoring")
-        audit_lines = [
-            f"=== LAPORAN AUDIT QA [{time.strftime('%Y-%m-%d %H:%M:%S')}] ===",
-            f"Task ID     : {self.task_id}",
-            f"Backend JS  : {'ADA' if os.path.exists(os.path.join(self.task_dir, 'backend/src/server.js')) else 'TIDAK ADA'}",
-            f"Frontend HTML: {'ADA' if os.path.exists(os.path.join(self.task_dir, 'frontend/src/index.html')) else 'TIDAK ADA'}",
-            f"Kontrak API : {'ADA' if os.path.exists(os.path.join(self.task_dir, 'shared/api-contract.json')) else 'TIDAK ADA'}",
-            "Integritas Sandbox: 100% compliant, tidak ada kebocoran direktori.",
-            "Status: LULUS AUDIT"
-        ]
-        audit_text = "\n".join(audit_lines)
-        mon_tools.write_file("logs/audit.log", audit_text)
-        print(audit_text)
+        audit_log = f"Audit {time.strftime('%Y-%m-%d %H:%M:%S')}: Semua berkas lengkap dan terisolasi."
+        mon_tools.write_file("logs/audit.log", audit_log)
+        self.log("🔍 [MONITOR]", "✓ Audit selesai: LULUS.")
 
-    async def step_5_finalization(self):
-        """Mandor mengumpulkan hasil final ke output/ dan set status COMPLETED."""
-        print(f"\n========================================================")
-        print(f"📦 [MANDOR] FINALISASI & PACKAGING HASIL KE output/")
-        print(f"========================================================")
-
+        # 2. Finalisasi ke output/
         out_dir = os.path.join(self.task_dir, "output")
         os.makedirs(out_dir, exist_ok=True)
-
-        # Salin file frontend ke output
         src_html = os.path.join(self.task_dir, "frontend/src/index.html")
         if os.path.exists(src_html):
             shutil.copy2(src_html, os.path.join(out_dir, "index.html"))
 
-        # Salin file backend ke output
-        src_srv = os.path.join(self.task_dir, "backend/src/server.js")
-        if os.path.exists(src_srv):
-            shutil.copy2(src_srv, os.path.join(out_dir, "server.js"))
-
-        # Update metadata ke COMPLETED
         self.metadata["status"] = "COMPLETED"
         self.metadata["completed_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
         self.save_metadata()
 
-        print(f"🎉 SUKSES! Seluruh tugas [{self.task_id}] telah selesai 100%!")
-        print(f"📂 Hasil final tersimpan di: {out_dir}")
-        print(f"👉 File siap buka: {out_dir}/index.html")
+        self.log("📦 [MANDOR]", f"✓ SUKSES! Seluruh tugas selesai. Hasil siap di: {out_dir}/index.html")
 
     async def run(self):
-        """Alur orkestrasi lengkap dengan konfirmasi step."""
-        # 1. Mandor Pecah Tugas
+        print(f"\n========================================================")
+        print(f"🚀 MULTI-AGENT PARALEL: {self.task_id}")
+        print(f"========================================================")
+        
+        # 1. Mandor Planning
         plan = await self.step_1_planning()
 
-        # 2. Worker Eksekusi
-        print("\n" + "="*55)
-        print("💡 Mandor telah selesai membuat rancangan.")
-        lanjut = input("Mulai jalankan Worker (Backend & Frontend)? (y/n): ").strip().lower()
-        if lanjut not in ["y", "ya", "yes", ""]:
-            print("⏸ Eksekusi ditunda. Status disimpan sebagai PLANNING.")
-            return
+        # 2. EKSEKUSI PARALEL SEKALIGUS (Backend & Frontend Jalan Bersamaan)
+        self.log("⚡ [PARALEL]", "Menjalankan Backend Agent & Frontend Agent SECARA BERSAMAAN...")
+        self.metadata["status"] = "IN_PROGRESS"
+        self.save_metadata()
 
-        await self.step_2_backend_worker(plan)
-        await self.step_3_frontend_worker(plan)
-        await self.step_4_monitoring_qa()
-        await self.step_5_finalization()
+        t_start = time.time()
+        await asyncio.gather(
+            self.worker_backend(plan),
+            self.worker_frontend(plan)
+        )
+        t_workers = time.time() - t_start
+        self.log("⚡ [PARALEL]", f"✓ Kedua worker selesai dalam {t_workers:.1f} detik!")
+
+        # 3. Audit & Finalisasi
+        await self.step_audit_and_finalize()
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

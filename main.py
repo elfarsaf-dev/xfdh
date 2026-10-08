@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 main.py - Interactive CLI Menu untuk Multi-Agent Atria Dawn Preview di Termux
-Jalankan: python main.py
+- Server Web Dashboard berjalan di BACKGROUND (tidak mengunci terminal)
+- Eksekusi Worker Paralel (Backend & Frontend jalan bareng)
+- Log ringkas, bersih, dan profesional
 """
 
 import os
@@ -15,8 +17,9 @@ from client_rotator import AtriaKeyRotator, load_env
 from mandor import MandorOrchestrator
 
 TASKS_DIR = os.path.abspath("tasks")
+DASHBOARD_PROC = None
 
-# ANSI Color Codes untuk Terminal Termux
+# ANSI Color Codes
 C_RESET = "\033[0m"
 C_BOLD = "\033[1m"
 C_GREEN = "\033[32m"
@@ -29,20 +32,32 @@ C_DIM = "\033[2m"
 def clear_screen():
     os.system("clear" if os.name != "nt" else "cls")
 
+def is_dashboard_running() -> bool:
+    global DASHBOARD_PROC
+    if DASHBOARD_PROC is not None and DASHBOARD_PROC.poll() is None:
+        return True
+    # Cek via lsof/netstat jika dijalankan di session lain
+    try:
+        import urllib.request
+        with urllib.request.urlopen("http://localhost:3000/api/tasks", timeout=1) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
 def print_header(rotator: AtriaKeyRotator):
+    dash_online = is_dashboard_running()
+    dash_status = f"{C_GREEN}🟢 AKTIF (http://localhost:3000){C_RESET}" if dash_online else f"{C_DIM}⚪ MATI{C_RESET}"
+    
     print(f"{C_BOLD}{C_CYAN}======================================================================{C_RESET}")
     print(f"{C_BOLD}{C_GREEN}  🤖 ATRIA DAWN PREVIEW - MULTI-AGENT ORCHESTRATOR (TERMUX CLI){C_RESET}")
     print(f"{C_BOLD}{C_CYAN}======================================================================{C_RESET}")
     print(f"{C_DIM}API Endpoint : {rotator.api_base}")
     print(f"Model ID     : {C_BOLD}{rotator.model}{C_RESET}")
-    
-    active_keys = sum(1 for k in rotator.keys.values() if k["key"] and not k["key"].startswith("atria_sk_placeholder"))
-    print(f"Status .env  : {C_GREEN if active_keys > 0 else C_YELLOW}{active_keys}/7 Key Terisi di .env{C_RESET}")
+    print(f"Web Dashboard: {dash_status}")
     print(f"Workspace    : {TASKS_DIR}")
     print(f"{C_BOLD}{C_CYAN}======================================================================{C_RESET}")
 
 def menu_list_tasks() -> List[str]:
-    """Menampilkan daftar tugas yang ada di folder tasks/"""
     os.makedirs(TASKS_DIR, exist_ok=True)
     task_dirs = sorted([d for d in os.listdir(TASKS_DIR) if os.path.isdir(os.path.join(TASKS_DIR, d))])
     
@@ -51,8 +66,8 @@ def menu_list_tasks() -> List[str]:
         print(f"{C_YELLOW}  Belum ada tugas. Pilih menu [1] untuk membuat tugas baru.{C_RESET}")
         return []
 
-    print(f"{C_DIM}{'No.':<4} {'ID Tugas':<32} {'Status':<12} {'Port':<14}{C_RESET}")
-    print(f"{C_DIM}{'-'*65}{C_RESET}")
+    print(f"{C_DIM}{'No.':<4} {'ID Tugas':<32} {'Status':<14} {'Port':<14}{C_RESET}")
+    print(f"{C_DIM}{'-'*67}{C_RESET}")
 
     for idx, t_id in enumerate(task_dirs, 1):
         task_json_file = os.path.join(TASKS_DIR, t_id, "task.json")
@@ -69,12 +84,11 @@ def menu_list_tasks() -> List[str]:
                 pass
 
         status_color = C_GREEN if status in ["DONE", "COMPLETED"] else (C_CYAN if status in ["READY", "INITIALIZED"] else C_YELLOW)
-        print(f"{idx:<4} {t_id:<32} {status_color}{status:<12}{C_RESET} {ports:<14}")
+        print(f"{idx:<4} {t_id:<32} {status_color}{status:<14}{C_RESET} {ports:<14}")
 
     return task_dirs
 
 def menu_create_task():
-    """Menu membuat tugas baru dengan folder isolasi."""
     print(f"\n{C_BOLD}{C_GREEN}➕ BUAT TUGAS BARU (ISOLASI FOLDER){C_RESET}")
     today = time.strftime("%Y-%m-%d")
     
@@ -84,7 +98,6 @@ def menu_create_task():
         return
 
     slug = "".join(c if c.isalnum() or c == "-" else "-" for c in title.lower()).strip("-")
-    
     os.makedirs(TASKS_DIR, exist_ok=True)
     existing_count = len(os.listdir(TASKS_DIR)) + 1
     task_id = f"{today}-{existing_count:03d}-{slug}"
@@ -97,14 +110,9 @@ def menu_create_task():
     b_port = input(f"Port Backend [Default 3001]: ").strip() or "3001"
     f_port = input(f"Port Frontend [Default 5174]: ").strip() or "5174"
 
-    print(f"\n{C_CYAN}Menginisialisasi folder tugas...{C_RESET}")
-    os.makedirs(os.path.join(task_dir, "backend", "src"), exist_ok=True)
-    os.makedirs(os.path.join(task_dir, "backend", "logs"), exist_ok=True)
-    os.makedirs(os.path.join(task_dir, "frontend", "src"), exist_ok=True)
-    os.makedirs(os.path.join(task_dir, "frontend", "logs"), exist_ok=True)
-    os.makedirs(os.path.join(task_dir, "monitoring", "logs"), exist_ok=True)
-    os.makedirs(os.path.join(task_dir, "shared"), exist_ok=True)
-    os.makedirs(os.path.join(task_dir, "output"), exist_ok=True)
+    print(f"\n{C_CYAN}Menginisialisasi folder isolasi...{C_RESET}")
+    for sub in ["backend/src", "backend/logs", "frontend/src", "frontend/logs", "monitoring/logs", "shared", "output"]:
+        os.makedirs(os.path.join(task_dir, sub), exist_ok=True)
 
     task_meta = {
         "task_id": task_id,
@@ -113,16 +121,7 @@ def menu_create_task():
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "status": "READY",
         "model": "Atria-Dawn-Preview",
-        "ports": {
-            "backend": int(b_port),
-            "frontend": int(f_port)
-        },
-        "workspaces": {
-            "backend": "backend/",
-            "frontend": "frontend/",
-            "shared": "shared/",
-            "output": "output/"
-        }
+        "ports": {"backend": int(b_port), "frontend": int(f_port)}
     }
     with open(os.path.join(task_dir, "task.json"), "w", encoding="utf-8") as f:
         json.dump(task_meta, f, indent=2)
@@ -131,29 +130,50 @@ def menu_create_task():
         json.dump({"contract_version": "1.0", "task_id": task_id, "endpoints": []}, f, indent=2)
 
     print(f"{C_GREEN}✓ Tugas berhasil dibuat di: {task_dir}{C_RESET}")
-    print(f"{C_DIM}Struktur isolasi siap: backend/, frontend/, monitoring/, shared/, output/{C_RESET}")
     
     run_now = input(f"\n{C_BOLD}Jalankan Mandor sekarang? (y/n): {C_RESET}").strip().lower()
-    if run_now == "y":
+    if run_now in ["y", "ya", "yes", ""]:
         asyncio.run(execute_mandor_run(task_id, prompt_brief))
 
 async def execute_mandor_run(task_id: str, brief: str):
-    """Menjalankan loop Mandor dengan log berwarna di terminal."""
-    print(f"\n{C_BOLD}{C_PURPLE}========================================================{C_RESET}")
-    print(f"{C_BOLD}{C_PURPLE}🚀 MEMULAI EKSEKUSI TUGAS: {task_id}{C_RESET}")
-    print(f"{C_BOLD}{C_PURPLE}========================================================{C_RESET}")
-
     mandor = MandorOrchestrator(task_id, brief)
     start_time = time.time()
     try:
         await mandor.run()
         elapsed = time.time() - start_time
-        print(f"\n{C_GREEN}🎉 Selesai dalam {elapsed:.1f} detik! Seluruh artefak berada di output/{C_RESET}")
+        print(f"\n{C_GREEN}🎉 Total waktu eksekusi: {elapsed:.1f} detik!{C_RESET}")
     except Exception as e:
-        print(f"\n{C_RED}❌ Terjadi kesalahan saat eksekusi: {e}{C_RESET}")
+        print(f"\n{C_RED}❌ Error saat eksekusi: {e}{C_RESET}")
+
+def toggle_dashboard_server():
+    global DASHBOARD_PROC
+    if is_dashboard_running():
+        print(f"\n{C_GREEN}🌐 Web Dashboard sedang AKTIF di: http://localhost:3000{C_RESET}")
+        print("Pilihan:")
+        print("  [1] Matikan Server")
+        print("  [0] Biarkan tetap jalan & kembali ke menu")
+        act = input("Pilih [0/1]: ").strip()
+        if act == "1":
+            if DASHBOARD_PROC is not None:
+                DASHBOARD_PROC.terminate()
+                DASHBOARD_PROC = None
+            print(f"{C_YELLOW}Web server dihentikan.{C_RESET}")
+    else:
+        print(f"\n{C_CYAN}Menyalakan Web Dashboard di background (Port 3000)...{C_RESET}")
+        try:
+            DASHBOARD_PROC = subprocess.Popen(
+                [sys.executable, "dashboard_server.py", "3000"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            time.sleep(1)
+            print(f"{C_GREEN}✅ Web Dashboard berhasil dinyalakan di background!{C_RESET}")
+            print(f"👉 Buka browser Chrome di HP: {C_BOLD}http://localhost:3000{C_RESET}")
+            print(f"{C_DIM}(Terminal ini tetap bebas kamu gunakan, tidak akan terkunci!){C_RESET}")
+        except Exception as e:
+            print(f"{C_RED}Gagal menyalakan dashboard: {e}{C_RESET}")
 
 def menu_check_keys(rotator: AtriaKeyRotator):
-    """Mengecek status 7 API Key di .env."""
     print(f"\n{C_BOLD}🔑 STATUS 7 API KEY DI .env:{C_RESET}")
     print(f"{C_DIM}{'Key':<8} {'Peran':<12} {'Status':<16} {'Nilai':<20}{C_RESET}")
     print(f"{C_DIM}{'-'*60}{C_RESET}")
@@ -162,11 +182,8 @@ def menu_check_keys(rotator: AtriaKeyRotator):
         val = info["key"]
         masked = f"{val[:8]}...{val[-4:]}" if len(val) > 12 else (val if val else "(KOSONG)")
         status = info["status"].upper()
-        
         status_color = C_GREEN if status == "ACTIVE" else (C_DIM if status == "STANDBY" else C_RED)
         print(f"{k_id:<8} {info['role']:<12} {status_color}{status:<16}{C_RESET} {masked:<20}")
-
-    print(f"\n{C_DIM}Edit file .env jika ingin mengganti API Key Atria asli.{C_RESET}")
 
 def main():
     load_env()
@@ -180,14 +197,17 @@ def main():
     while True:
         clear_screen()
         print_header(rotator)
+        dash_on = is_dashboard_running()
+        dash_label = f"{C_GREEN}[ONLINE - Buka di Chrome]{C_RESET}" if dash_on else f"{C_DIM}[OFF - Tekan untuk Nyalakan]{C_RESET}"
+
         print(f"""
 {C_BOLD}PILIHAN MENU:{C_RESET}
-  {C_GREEN}[1]{C_RESET} ➕ Buat Tugas Baru (Scaffold Folder & Metadata)
+  {C_GREEN}[1]{C_RESET} ➕ Buat Tugas Baru
   {C_CYAN}[2]{C_RESET} 📂 Lihat Semua Tugas & Status
-  {C_PURPLE}[3]{C_RESET} 🚀 Jalankan Mandor untuk Tugas Tertentu
+  {C_PURPLE}[3]{C_RESET} 🚀 Jalankan Mandor (Worker Paralel)
   {C_YELLOW}[4]{C_RESET} 📜 Lihat Kontrak (shared/api-contract.json)
   {C_CYAN}[5]{C_RESET} 🔑 Cek Status 7 API Key di .env
-  {C_GREEN}[6]{C_RESET} 🌐 Jalankan Web UI Dashboard (Port 3000)
+  {C_GREEN}[6]{C_RESET} 🌐 Web Dashboard: {dash_label}
   {C_RED}[0]{C_RESET} 🚪 Keluar
 """)
         choice = input(f"{C_BOLD}Pilih opsi [0-6]: {C_RESET}").strip()
@@ -238,19 +258,12 @@ def main():
                 test_api.test()
             input(f"\n{C_DIM}Tekan Enter untuk kembali ke menu...{C_RESET}")
         elif choice == "6":
-            print(f"\n{C_GREEN}🚀 Menjalankan Web UI Dashboard di http://localhost:3000...{C_RESET}")
-            print(f"{C_DIM}Buka browser Chrome di HP kamu dan akses:{C_RESET} {C_BOLD}http://localhost:3000{C_RESET}")
-            print(f"{C_DIM}Tekan Ctrl+C untuk berhenti dan kembali ke menu.{C_RESET}\n")
-            server_dir = "dist" if os.path.exists("dist") else "."
-            try:
-                # Menggunakan server HTTP bawaan Python (100% tanpa butuh vite / npm!)
-                subprocess.run([sys.executable, "-m", "http.server", "3000", "--directory", server_dir])
-            except KeyboardInterrupt:
-                pass
-            except Exception as e:
-                print(f"{C_RED}Gagal menjalankan server: {e}{C_RESET}")
+            toggle_dashboard_server()
             input(f"\n{C_DIM}Tekan Enter untuk kembali ke menu...{C_RESET}")
         elif choice == "0":
+            global DASHBOARD_PROC
+            if DASHBOARD_PROC is not None:
+                DASHBOARD_PROC.terminate()
             print(f"\n{C_GREEN}Sampai jumpa! Sistem multi-agent dihentikan.{C_RESET}\n")
             break
         else:

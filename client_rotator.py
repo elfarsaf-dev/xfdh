@@ -93,7 +93,7 @@ class AtriaKeyRotator:
         print(f"\n[KEY ROTATION] ⚡ Peran '{role}' otomatis rotasi ke {new_key_id} (Cadangan)!")
         return new_api_key
 
-    def _sync_http_stream(self, api_key: str, payload: Dict[str, Any], live_print: bool = True) -> Dict[str, Any]:
+    def _sync_http_stream(self, api_key: str, payload: Dict[str, Any], live_print: bool = False) -> Dict[str, Any]:
         """
         Eksekusi SSE Streaming persis seperti Cloudflare Worker milik user.
         stream=True membuat first-byte response datang dalam hitungan detik!
@@ -160,9 +160,9 @@ class AtriaKeyRotator:
         messages: List[Dict[str, str]], 
         tools: Optional[List[Dict[str, Any]]] = None,
         max_retries: int = 3,
-        live_print: bool = True
+        live_print: bool = False
     ) -> Dict[str, Any]:
-        """Panggilan async ke Atria-Dawn-Preview dengan auto-retry & streaming."""
+        """Panggilan async ke Atria-Dawn-Preview dengan auto-retry."""
         attempts = 0
         current_key = self.get_api_key(role)
 
@@ -175,7 +175,6 @@ class AtriaKeyRotator:
             payload["tools"] = tools
 
         while attempts < max_retries:
-            print(f"\n[{role.upper()}] Menghubungkan ke Atria-Dawn-Preview (Streaming SSE)...")
             res = await asyncio.to_thread(self._sync_http_stream, current_key, payload, live_print)
 
             if res.get("status_code") == 200:
