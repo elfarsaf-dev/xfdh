@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
 client_rotator.py - Atria Dawn Preview Key Rotator & Client Manager
-MENGGUNAKAN HTTP CLIENT BAWAAN PYTHON (urllib.request & json).
-100% BEBAS DEPENDENSI: Tidak butuh 'pip install openai', tidak butuh Rust/maturin!
-Langsung jalan di Termux Android (Python 3.10 - 3.14).
+MENGGUNAKAN SSE STREAMING (stream=True & text/event-stream).
+100% BEBAS DEPENDENSI, bebas timeout, dan menampilkan teks secara real-time!
 """
 
 import os
@@ -94,20 +93,61 @@ class AtriaKeyRotator:
         print(f"\n[KEY ROTATION] ⚡ Peran '{role}' otomatis rotasi ke {new_key_id} (Cadangan)!")
         return new_api_key
 
-    def _sync_http_post(self, api_key: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Eksekusi request HTTP POST native tanpa dependensi."""
+    def _sync_http_stream(self, api_key: str, payload: Dict[str, Any], live_print: bool = True) -> Dict[str, Any]:
+        """
+        Eksekusi SSE Streaming persis seperti Cloudflare Worker milik user.
+        stream=True membuat first-byte response datang dalam hitungan detik!
+        """
         url = f"{self.api_base}/chat/completions"
+        payload["stream"] = True  # Kunci streaming anti-timeout!
         data_bytes = json.dumps(payload).encode("utf-8")
 
         req = urllib.request.Request(url, data=data_bytes, method="POST")
         req.add_header("Content-Type", "application/json")
         req.add_header("Authorization", f"Bearer {api_key}")
-        req.add_header("User-Agent", "Atria-Termux-Agent/1.0")
+        req.add_header("Accept", "text/event-stream")
+        req.add_header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Termux) AppleWebKit/537.36")
 
         try:
-            with urllib.request.urlopen(req, timeout=60) as response:
-                body = response.read().decode("utf-8")
-                return {"status_code": response.status, "data": json.loads(body)}
+            with urllib.request.urlopen(req, timeout=120) as response:
+                full_text = ""
+                # Baca stream per baris secara real-time
+                for raw_line in response:
+                    line = raw_line.decode("utf-8").strip()
+                    if not line:
+                        continue
+                    if line.startswith("data:"):
+                        data_part = line[5:].strip()
+                        if data_part == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_part)
+                            delta = (
+                                chunk.get("choices", [{}])[0].get("delta", {}).get("content")
+                                or chunk.get("choices", [{}])[0].get("message", {}).get("content")
+                                or ""
+                            )
+                            if delta:
+                                full_text += delta
+                                if live_print:
+                                    sys.stdout.write(delta)
+                                    sys.stdout.flush()
+                        except Exception:
+                            pass
+
+                if live_print:
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
+
+                return {
+                    "status_code": 200,
+                    "data": {
+                        "choices": [
+                            {"message": {"content": full_text}}
+                        ]
+                    }
+                }
+
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8") if e.fp else ""
             return {"status_code": e.code, "error": err_body}
@@ -119,9 +159,10 @@ class AtriaKeyRotator:
         role: str, 
         messages: List[Dict[str, str]], 
         tools: Optional[List[Dict[str, Any]]] = None,
-        max_retries: int = 3
+        max_retries: int = 3,
+        live_print: bool = True
     ) -> Dict[str, Any]:
-        """Panggilan async ke Atria-Dawn-Preview dengan auto-retry & rotasi 429."""
+        """Panggilan async ke Atria-Dawn-Preview dengan auto-retry & streaming."""
         attempts = 0
         current_key = self.get_api_key(role)
 
@@ -134,7 +175,8 @@ class AtriaKeyRotator:
             payload["tools"] = tools
 
         while attempts < max_retries:
-            res = await asyncio.to_thread(self._sync_http_post, current_key, payload)
+            print(f"\n[{role.upper()}] Menghubungkan ke Atria-Dawn-Preview (Streaming SSE)...")
+            res = await asyncio.to_thread(self._sync_http_stream, current_key, payload, live_print)
 
             if res.get("status_code") == 200:
                 return res["data"]

@@ -1528,21 +1528,44 @@ class AtriaKeyRotator:
         return self.keys[new_k]["key"]
 
     def _sync_post(self, key: str, payload: dict) -> dict:
+        payload["stream"] = True
         req = urllib.request.Request(
             f"{self.api_base}/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {key}",
+                "Accept": "text/event-stream"
+            },
             method="POST"
         )
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                return {"code": resp.status, "data": json.loads(resp.read().decode())}
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                full_text = ""
+                for raw in resp:
+                    line = raw.decode("utf-8").strip()
+                    if line.startswith("data:"):
+                        part = line[5:].strip()
+                        if part == "[DONE]": break
+                        try:
+                            c = json.loads(part)
+                            delta = c.get("choices", [{}])[0].get("delta", {}).get("content") or ""
+                            if delta:
+                                full_text += delta
+                                sys.stdout.write(delta)
+                                sys.stdout.flush()
+                        except: pass
+                sys.stdout.write("\n")
+                return {"code": 200, "data": {"choices": [{"message": {"content": full_text}}]}}
         except urllib.error.HTTPError as e:
             return {"code": e.code, "error": e.read().decode()}
+        except Exception as e:
+            return {"code": 500, "error": str(e)}
 
     async def execute_chat_completion(self, role: str, messages: list):
         key = self.get_api_key(role)
         payload = {"model": self.model, "messages": messages, "temperature": 0.2}
+        print(f"\n[{role.upper()}] Streaming respon dari Atria-Dawn-Preview...")
         res = await asyncio.to_thread(self._sync_post, key, payload)
         if res.get("code") == 429:
             key = self.rotate_on_429(role)

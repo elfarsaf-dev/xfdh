@@ -232,6 +232,10 @@ def main():
             input(f"\n{C_DIM}Tekan Enter untuk kembali ke menu...{C_RESET}")
         elif choice == "5":
             menu_check_keys(rotator)
+            test_opt = input(f"\n{C_BOLD}Mau tes ping koneksi ke Atria API sekarang? (y/n): {C_RESET}").strip().lower()
+            if test_opt == "y":
+                import test_api
+                test_api.test()
             input(f"\n{C_DIM}Tekan Enter untuk kembali ke menu...{C_RESET}")
         elif choice == "6":
             print(f"\n{C_GREEN}🚀 Menjalankan Web UI Dashboard di http://localhost:3000...{C_RESET}")
