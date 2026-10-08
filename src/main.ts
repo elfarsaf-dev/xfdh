@@ -1573,8 +1573,8 @@ class AtriaKeyRotator:
         return res.get("data", {})`,
 
       mandor: `#!/usr/bin/env python3
-# mandor.py - Orchestrator Atria-Dawn-Preview
-import os, sys, json, asyncio
+# mandor.py - Orchestrator Multi-Agent Atria Dawn Preview
+import os, sys, json, asyncio, shutil
 from client_rotator import AtriaKeyRotator
 from worker_tools import AgentSandboxTools
 
@@ -1583,23 +1583,48 @@ class MandorOrchestrator:
         self.task_id = task_id
         self.brief = brief
         self.rotator = AtriaKeyRotator()
-        self.task_dir = os.path.expanduser(f"~/agent-workspace/tasks/{task_id}")
+        self.task_dir = os.path.abspath(f"tasks/{task_id}")
+        self.meta_file = os.path.join(self.task_dir, "task.json")
 
     async def run(self):
-        print(f"[MANDOR] Memproses {self.task_id} dengan {self.rotator.model}...")
-        
-        # 1. Perencanaan (Panggil Atria via urllib native)
+        # 1. Mandor (Key #1) Planning
+        print(f"\n👑 [MANDOR] Merancang arsitektur untuk {self.task_id}...")
         res = await self.rotator.execute_chat_completion("mandor", [
-            {"role": "system", "content": "Kamu adalah Mandor AI. Pecah tugas menjadi subtask backend & frontend."},
+            {"role": "system", "content": "Kamu adalah Mandor AI. Pecah tugas menjadi checklist backend & frontend."},
             {"role": "user", "content": self.brief}
         ])
-        content = res.get("choices", [{}])[0].get("message", {}).get("content", "Rencana dibuat.")
-        print(f"✓ Rencana: {content[:100]}...")
-        
-        # 2. Tulis kontrak komunikasi
+        plan = res.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+        # Konfirmasi
+        if input("\nLanjut eksekusi Worker (Backend & Frontend)? (y/n): ").lower() not in ["y", "ya", ""]:
+            return
+
+        # 2. Backend Worker (Key #2)
+        print("\n🛠️ [BACKEND WORKER] Membuat server & api-contract.json...")
+        b_res = await self.rotator.execute_chat_completion("backend", [
+            {"role": "system", "content": "Kamu adalah Backend Agent. Buat kode server.js Express lengkap dengan CORS."},
+            {"role": "user", "content": f"Rencana: {plan}"}
+        ])
         b_tools = AgentSandboxTools(self.task_dir, "backend")
-        b_tools.write_file("shared/api-contract.json", json.dumps({"endpoints": [{"path": "/api/demo", "method": "GET"}]}, indent=2))
-        print("✓ shared/api-contract.json berhasil ditulis.")`,
+        b_tools.write_file("src/server.js", b_res.get("choices", [{}])[0].get("message", {}).get("content", ""))
+        b_tools.write_file("shared/api-contract.json", json.dumps({"endpoints": []}, indent=2))
+
+        # 3. Frontend Worker (Key #3)
+        print("\n🎨 [FRONTEND WORKER] Membuat antarmuka UI HTML/Tailwind...")
+        f_res = await self.rotator.execute_chat_completion("frontend", [
+            {"role": "system", "content": "Kamu adalah Frontend Agent. Buat file HTML lengkap dengan Tailwind CSS & JavaScript."},
+            {"role": "user", "content": f"Rencana: {plan}"}
+        ])
+        f_tools = AgentSandboxTools(self.task_dir, "frontend")
+        f_tools.write_file("src/index.html", f_res.get("choices", [{}])[0].get("message", {}).get("content", ""))
+
+        # 4. Finalisasi output & Update task.json ke COMPLETED
+        out = os.path.join(self.task_dir, "output")
+        os.makedirs(out, exist_ok=True)
+        shutil.copy2(os.path.join(self.task_dir, "frontend/src/index.html"), os.path.join(out, "index.html"))
+        with open(self.meta_file, "w") as f:
+            json.dump({"task_id": self.task_id, "status": "COMPLETED", "brief": self.brief}, f, indent=2)
+        print(f"\n🎉 SUKSES 100%! Hasil siap di: {out}/index.html")`,
 
       tools: `#!/usr/bin/env python3
 # worker_tools.py - Sandboxed Execution Tools untuk Termux
