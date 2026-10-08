@@ -187,9 +187,10 @@ def main():
   {C_PURPLE}[3]{C_RESET} 🚀 Jalankan Mandor untuk Tugas Tertentu
   {C_YELLOW}[4]{C_RESET} 📜 Lihat Kontrak (shared/api-contract.json)
   {C_CYAN}[5]{C_RESET} 🔑 Cek Status 7 API Key di .env
+  {C_GREEN}[6]{C_RESET} 🌐 Jalankan Web UI Dashboard (Port 3000)
   {C_RED}[0]{C_RESET} 🚪 Keluar
 """)
-        choice = input(f"{C_BOLD}Pilih opsi [0-5]: {C_RESET}").strip()
+        choice = input(f"{C_BOLD}Pilih opsi [0-6]: {C_RESET}").strip()
 
         if choice == "1":
             menu_create_task()
@@ -231,6 +232,16 @@ def main():
             input(f"\n{C_DIM}Tekan Enter untuk kembali ke menu...{C_RESET}")
         elif choice == "5":
             menu_check_keys(rotator)
+            input(f"\n{C_DIM}Tekan Enter untuk kembali ke menu...{C_RESET}")
+        elif choice == "6":
+            print(f"\n{C_GREEN}🚀 Menjalankan Web UI Dashboard di http://localhost:3000...{C_RESET}")
+            print(f"{C_DIM}Buka browser Chrome di HP kamu dan akses:{C_RESET} {C_BOLD}http://localhost:3000{C_RESET}")
+            print(f"{C_DIM}Tekan Ctrl+C untuk kembali ke menu CLI Termux.{C_RESET}\n")
+            try:
+                subprocess.run(["npm", "run", "dev"])
+            except Exception as e:
+                print(f"{C_RED}Gagal menjalankan npm run dev: {e}{C_RESET}")
+                print(f"{C_YELLOW}Pastikan nodejs terpasang: pkg install nodejs -y && npm install{C_RESET}")
             input(f"\n{C_DIM}Tekan Enter untuk kembali ke menu...{C_RESET}")
         elif choice == "0":
             print(f"\n{C_GREEN}Sampai jumpa! Sistem multi-agent dihentikan.{C_RESET}\n")
